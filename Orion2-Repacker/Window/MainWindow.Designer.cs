@@ -229,6 +229,7 @@ namespace Orion.Window
             this.addToolStripMenuItem.Name = "addToolStripMenuItem";
             this.addToolStripMenuItem.Size = new System.Drawing.Size(125, 22);
             this.addToolStripMenuItem.Text = "Add";
+            this.addToolStripMenuItem.Click += new System.EventHandler(this.OnAddFile);
             // 
             // removeToolStripMenuItem
             // 

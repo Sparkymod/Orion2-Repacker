@@ -64,7 +64,7 @@ namespace Orion.Crypto
             ;
         }
 
-        public static byte[] DecryptFileString(PackStreamVerBase pStream, System.IO.Stream pBuffer)
+        public static byte[] DecryptFileString(IPackStreamVerBase pStream, System.IO.Stream pBuffer)
         {
             if (pStream.GetCompressedHeaderSize() > 0 && pStream.GetEncodedHeaderSize() > 0 && pStream.GetHeaderSize() > 0)
             {
@@ -79,7 +79,7 @@ namespace Orion.Crypto
             throw new Exception("ERROR decrypting file list: the size of the list is invalid.");
         }
 
-        public static byte[] DecryptFileTable(PackStreamVerBase pStream, System.IO.Stream pBuffer)
+        public static byte[] DecryptFileTable(IPackStreamVerBase pStream, System.IO.Stream pBuffer)
         {
             if (pStream.GetCompressedDataSize() > 0 && pStream.GetEncodedDataSize() > 0 && pStream.GetDataSize() > 0)
             {
@@ -94,7 +94,7 @@ namespace Orion.Crypto
             throw new Exception("ERROR decrypting file table: the size of the table is invalid.");
         }
 
-        public static byte[] DecryptData(PackFileHeaderVerBase pHeader, MemoryMappedFile pData)
+        public static byte[] DecryptData(IPackFileHeaderVerBase pHeader, MemoryMappedFile pData)
         {
 
             if (pHeader.GetCompressedFileSize() > 0 && pHeader.GetEncodedFileSize() > 0 && pHeader.GetFileSize() > 0)
@@ -120,10 +120,8 @@ namespace Orion.Crypto
 
             if (!((bits[3] & 1) != 0))
             {
-                byte[] aKey;
-                byte[] aIV;
                 // Get the AES Key/IV for transformation
-                CipherKeys.GetKeyAndIV(uVer, uLenCompressed, out aKey, out aIV);
+                CipherKeys.GetKeyAndIV(uVer, uLenCompressed, out byte[] aKey, out byte[] aIV);
 
                 // Decode the base64 encoded string
                 pSrc = Convert.FromBase64String(Encoding.UTF8.GetString(pSrc));
@@ -165,10 +163,8 @@ namespace Orion.Crypto
 
             if (!((bits[3] & 1) != 0))
             {
-                byte[] aKey;
-                byte[] aIV;
                 // Get the AES Key/IV for transformation
-                CipherKeys.GetKeyAndIV(uVer, uLenCompressed, out aKey, out aIV);
+                CipherKeys.GetKeyAndIV(uVer, uLenCompressed, out byte[] aKey, out byte[] aIV);
 
                 // Perform AES block encryption
                 AESCipher pCipher = new AESCipher(aKey, aIV);
@@ -189,9 +185,8 @@ namespace Orion.Crypto
 
         private static byte[] EncryptXOR(uint uVer, byte[] pSrc, uint uLen, uint uLenCompressed)
         {
-            byte[] aKey;
 
-            CipherKeys.GetXORKey(uVer, out aKey);
+            CipherKeys.GetXORKey(uVer, out byte[] aKey);
 
             uint uBlock = uLen >> 2;
             uint uBlockOffset = 0;

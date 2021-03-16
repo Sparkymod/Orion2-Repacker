@@ -27,7 +27,7 @@ namespace Orion.Window
         private Stopwatch pStopWatch;
 
         public string FileName { get; set; }
-        public PackStreamVerBase Stream { get; set; }
+        public IPackStreamVerBase Stream { get; set; }
         public long ElapsedTime { get; set; }
 
         public ProgressWindow()

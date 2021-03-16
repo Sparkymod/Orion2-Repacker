@@ -20,7 +20,7 @@ using System.IO;
 
 namespace Orion.Crypto.Stream
 {
-    public class PackFileHeaderVer2 : PackFileHeaderVerBase
+    public class PackFileHeaderVer2 : IPackFileHeaderVerBase
     {
         private uint dwBufferFlag;
         private int nFileIndex;

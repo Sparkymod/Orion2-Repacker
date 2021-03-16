@@ -20,12 +20,12 @@ using System.IO;
 
 namespace Orion.Crypto.Stream
 {
-    public class PackFileHeaderVer1 : PackFileHeaderVerBase
+    public class PackFileHeaderVer1 : IPackFileHeaderVerBase
     {
-        private byte[] aPackingDef; //A "Packing Definition", unused.
+        private readonly byte[] aPackingDef; //A "Packing Definition", unused.
         private int nFileIndex;
         private uint dwBufferFlag;
-        private int[] Reserved;
+        private readonly int[] Reserved;
         private ulong uOffset;
         private uint uEncodedFileSize;
         private ulong uCompressedFileSize;
@@ -53,9 +53,8 @@ namespace Orion.Crypto.Stream
 
         public static PackFileHeaderVer1 CreateHeader(int nIndex, uint dwFlag, ulong uOffset, byte[] pData)
         {
-            uint uLen, uCompressedLen, uEncodedLen;
 
-            CryptoMan.Encrypt(PackVer.MS2F, pData, dwFlag, out uLen, out uCompressedLen, out uEncodedLen);
+            CryptoMan.Encrypt(PackVer.MS2F, pData, dwFlag, out uint uLen, out uint uCompressedLen, out uint uEncodedLen);
 
             return new PackFileHeaderVer1
             {
