@@ -21,7 +21,7 @@ using System.IO;
 
 namespace Orion.Crypto.Stream
 {
-    public class PackStreamVer1 : PackStreamVerBase
+    public class PackStreamVer1 : IPackStreamVerBase
     {
         private uint uReserved;
         private ulong dwCompressedDataSize;

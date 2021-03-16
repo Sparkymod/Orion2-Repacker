@@ -30,7 +30,7 @@ namespace Orion.Crypto.Common
         public string Hash { get; set; } // A hash assigned to all files in the directory
         public string Name { get; set; } // The full name of the file (path/name.ext)
         public string TreeName { get; set; } // The visual name displayed in the tree (name.ext)
-        public PackFileHeaderVerBase FileHeader { get; set; } // The file information (size, offset, etc.)
+        public IPackFileHeaderVerBase FileHeader { get; set; } // The file information (size, offset, etc.)
         public byte[] Data { get; set; } // The raw, decrypted, and current data buffer of the file
         public bool Changed { get; set; } // If the data has been modified in the repacker
 
@@ -39,20 +39,22 @@ namespace Orion.Crypto.Common
             return new PackFileEntry
             {
                 Index = int.MaxValue,
-                Hash = this.Hash,
-                Name = this.Name,
-                TreeName = this.TreeName,
-                //FileHeader = this.FileHeader,
-                Data = (pData == null ? this.Data : pData),
+                Hash = Hash,
+                Name = Name,
+                TreeName = TreeName,
+                //FileHeader = FileHeader,
+                Data = (pData ?? Data),
                 Changed = true
             };
         }
 
         public int CompareTo(PackFileEntry pObj)
         {
-            if (this.Index == pObj.Index) return 0;
-            if (this.Index > pObj.Index) return 1;
-            return -1;
+            if (Index == pObj.Index) {
+                return 0;
+            }
+
+            return Index > pObj.Index ? 1 : -1;
         }
 
         public override string ToString()

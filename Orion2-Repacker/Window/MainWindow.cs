@@ -27,84 +27,68 @@ using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.IO.MemoryMappedFiles;
+using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
 using static Orion.Crypto.CryptoMan;
 
-namespace Orion.Window
-{
-    public partial class MainWindow : Form
-    {
+namespace Orion.Window {
+    public partial class MainWindow : Form {
         private string sHeaderUOL;
         private PackNodeList pNodeList;
         private MemoryMappedFile pDataMappedMemFile;
         private ProgressWindow pProgress;
 
-        public MainWindow()
-        {
+        public MainWindow() {
             InitializeComponent();
 
-            this.pImagePanel.AutoScroll = true;
+            pImagePanel.AutoScroll = true;
 
-            this.pImageData.BorderStyle = BorderStyle.None;
-            this.pImageData.Anchor = (AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right);
+            pImageData.BorderStyle = BorderStyle.None;
+            pImageData.Anchor = (AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right);
 
-            this.pMenuStrip.Renderer = new MenuRenderer();
+            pMenuStrip.Renderer = new MenuRenderer();
 
-            this.pPrevSize = this.Size;
+            pPrevSize = Size;
 
-            this.sHeaderUOL = "";
+            sHeaderUOL = "";
 
-            this.pNodeList = null;
-            this.pDataMappedMemFile = null;
-            this.pProgress = null;
+            pNodeList = null;
+            pDataMappedMemFile = null;
+            pProgress = null;
 
-            this.UpdatePanel("Empty", null);
+            UpdatePanel("Empty", null);
         }
 
-        private void AddFileEntry(PackFileEntry pEntry)
-        {
-            PackNode pRoot = this.pTreeView.Nodes[0] as PackNode;
-
-            if (pRoot != null)
-            {
-                PackStreamVerBase pStream = pRoot.Tag as PackStreamVerBase;
-
-                if (pStream != null)
-                {
+        private void AddFileEntry(PackFileEntry pEntry) {
+            if (pTreeView.Nodes[0] is PackNode pRoot) {
+                if (pRoot.Tag is IPackStreamVerBase pStream) {
                     pStream.GetFileList().Add(pEntry);
                 }
             }
         }
 
-        private void InitializeTree(PackStreamVerBase pStream)
-        {
+        private void InitializeTree(IPackStreamVerBase pStream) {
             // Insert the root node (file)
-            string[] aPath = this.sHeaderUOL.Replace(".m2h", "").Split('/');
-            this.pTreeView.Nodes.Add(new PackNode(pStream, aPath[aPath.Length - 1]));
+            string[] aPath = sHeaderUOL.Replace(".m2h", "").Split('/');
+            pTreeView.Nodes.Add(new PackNode(pStream, aPath[aPath.Length - 1]));
 
-            if (this.pNodeList != null)
-            {
-                this.pNodeList.InternalRelease();
+            if (pNodeList != null) {
+                pNodeList.InternalRelease();
             }
-            this.pNodeList = new PackNodeList("/");
+            pNodeList = new PackNodeList("/");
 
-            foreach (PackFileEntry pEntry in pStream.GetFileList())
-            {
-                if (pEntry.Name.Contains("/"))
-                {
+            foreach (PackFileEntry pEntry in pStream.GetFileList()) {
+                if (pEntry.Name.Contains("/")) {
                     string sPath = pEntry.Name;
                     PackNodeList pCurList = pNodeList;
 
-                    while (sPath.Contains("/"))
-                    {
+                    while (sPath.Contains("/")) {
                         string sDir = sPath.Substring(0, sPath.IndexOf('/') + 1);
-                        if (!pCurList.Children.ContainsKey(sDir))
-                        {
+                        if (!pCurList.Children.ContainsKey(sDir)) {
                             pCurList.Children.Add(sDir, new PackNodeList(sDir));
-                            if (pCurList == pNodeList)
-                            {
-                                this.pTreeView.Nodes[0].Nodes.Add(new PackNode(pCurList.Children[sDir], sDir));
+                            if (pCurList == pNodeList) {
+                                pTreeView.Nodes[0].Nodes.Add(new PackNode(pCurList.Children[sDir], sDir));
                             }
                         }
                         pCurList = pCurList.Children[sDir];
@@ -114,66 +98,129 @@ namespace Orion.Window
 
                     pEntry.TreeName = sPath;
                     pCurList.Entries.Add(sPath, pEntry);
-                } else
-                {
+                } else {
                     pEntry.TreeName = pEntry.Name;
 
-                    this.pNodeList.Entries.Add(pEntry.Name, pEntry);
-                    this.pTreeView.Nodes[0].Nodes.Add(new PackNode(pEntry, pEntry.Name));
+                    pNodeList.Entries.Add(pEntry.Name, pEntry);
+                    pTreeView.Nodes[0].Nodes.Add(new PackNode(pEntry, pEntry.Name));
                 }
             }
 
             // Sort all nodes
-            this.pTreeView.Sort();
+            pTreeView.Sort();
         }
 
-        private void NotifyMessage(string sText, MessageBoxIcon eIcon = MessageBoxIcon.None)
-        {
-            MessageBox.Show(this, sText, this.Text, MessageBoxButtons.OK, eIcon);
+        private void NotifyMessage(string sText, MessageBoxIcon eIcon = MessageBoxIcon.None) {
+            MessageBox.Show(this, sText, Text, MessageBoxButtons.OK, eIcon);
         }
 
-        private void OnAbout(object sender, EventArgs e)
-        {
-            About pAbout = new About
-            {
+        private void OnAbout(object sender, EventArgs e) {
+            About pAbout = new About {
                 Owner = this
             };
 
             pAbout.ShowDialog();
         }
 
-        private void OnChangeImage(object sender, EventArgs e)
-        {
-            if (!this.pChangeImageBtn.Visible)
-            {
+        private void OnAddFile(object sender, EventArgs e) {
+            if (pNodeList == null) {
+                NotifyMessage("Please load an file first.", MessageBoxIcon.Information);
                 return;
             }
 
-            PackNode pNode = this.pTreeView.SelectedNode as PackNode;
-            if (pNode != null && pNode.Data != null)
-            {
-                PackFileEntry pEntry = pNode.Tag as PackFileEntry;
-
-                if (pEntry != null)
+            PackNode pNode = pTreeView.SelectedNode as PackNode;
+            if (pNode != null) {
+                if (pNode.Tag is PackFileEntry) //wtf are they thinking?
                 {
-                    string sExtension = pEntry.TreeName.Split('.')[1];
+                    NotifyMessage("Please select a directory to add into!", MessageBoxIcon.Exclamation);
+                    return;
+                }
+            }
 
-                    OpenFileDialog pDialog = new OpenFileDialog
-                    {
+            OpenFileDialog pDialog = new OpenFileDialog() {
+                Title = "Select the file to add",
+                Filter = "MapleStory2 Files|*",
+                Multiselect = false
+            };
+
+            if (pDialog.ShowDialog() != DialogResult.OK) {
+                return;
+            }
+
+            sHeaderUOL = Dir_BackSlashToSlash(pDialog.FileName);
+
+            string sHeaderName = sHeaderUOL.Substring(sHeaderUOL.LastIndexOf('/') + 1);
+
+            if (!File.Exists(sHeaderUOL)) {
+                NotifyMessage(string.Format("Unable to load the {0} file.\r\nPlease make sure it exists and is not being used.", sHeaderName), MessageBoxIcon.Error);
+                return;
+            }
+
+            PackNodeList pList;
+            if (pNode.Level == 0) {
+                // If they're trying to add to the root of the file,
+                // then just use the root node list of this tree.
+                pList = pNodeList;
+            } else {
+                pList = pNode.Tag as PackNodeList;
+            }
+
+            byte[] pData = File.ReadAllBytes(pDialog.FileName);
+
+            PackFileEntry pEntry = new PackFileEntry() {
+                Name = sHeaderName,
+                Hash = CreateHash(sHeaderUOL),
+                Index = 1,
+                Changed = true,
+                TreeName = sHeaderName,
+                Data = pData
+            };
+
+            if (pList.Entries.ContainsKey(pEntry.TreeName)) {
+                NotifyMessage("File name already exists in directory.", MessageBoxIcon.Exclamation);
+                return;
+            }
+            AddFileEntry(pEntry);
+            pList.Entries.Add(pEntry.TreeName, pEntry);
+
+            PackNode pChild = new PackNode(pEntry, pEntry.TreeName);
+            pNode.Nodes.Add(pChild);
+
+            pEntry.Name = pChild.Path;
+        }
+
+        private static string CreateHash(string sHeaderUOL) {
+            if (!File.Exists(sHeaderUOL)) {
+                return "";
+            }
+
+            using (MD5 md5 = MD5.Create()) {
+                using (FileStream stream = File.OpenRead(sHeaderUOL)) {
+                    byte[] hash = md5.ComputeHash(stream);
+                    return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+                }
+            }
+        }
+
+        private void OnChangeImage(object sender, EventArgs e) {
+            if (!pChangeImageBtn.Visible) {
+                return;
+            }
+
+            if (pTreeView.SelectedNode is PackNode pNode && pNode.Data != null) {
+                if (pNode.Tag is PackFileEntry pEntry) {
+                    string sExtension = pEntry.TreeName.Split('.')[1];
+                    OpenFileDialog pDialog = new OpenFileDialog {
                         Title = "Select the new image",
-                        Filter = string.Format("{0} Image|*.{0}", sExtension.ToUpper()),
+                        Filter = string.Format("{0} Image|*.{0}",
+                        sExtension.ToUpper()),
                         Multiselect = false
                     };
-
-                    if (pDialog.ShowDialog() == DialogResult.OK)
-                    {
+                    if (pDialog.ShowDialog() == DialogResult.OK) {
                         byte[] pData = File.ReadAllBytes(pDialog.FileName);
-
-                        if (pNode.Data != pData)
-                        {
+                        if (pNode.Data != pData) {
                             pEntry.Data = pData;
                             pEntry.Changed = true;
-
                             UpdatePanel(sExtension, pData);
                         }
                     }
@@ -181,113 +228,80 @@ namespace Orion.Window
             }
         }
 
-        private void OnChangeWindowSize(object sender, EventArgs e)
-        {
-            int nHeight = (this.Size.Height - this.pPrevSize.Height);
-            int nWidth = (this.Size.Width - this.pPrevSize.Width);
+        private void OnChangeWindowSize(object sender, EventArgs e) {
+            int nHeight = (Size.Height - pPrevSize.Height);
+            int nWidth = (Size.Width - pPrevSize.Width);
 
-            this.pTextData.Size = new Size
-            {
-                Height = this.pTextData.Height + nHeight,
-                Width = this.pTextData.Width + nWidth
+            pTextData.Size = new Size {
+                Height = pTextData.Height + nHeight,
+                Width = pTextData.Width + nWidth
             };
 
-            this.pImagePanel.Size = new Size
-            {
-                Height = this.pImagePanel.Height + nHeight,
-                Width = this.pImagePanel.Width + nWidth
+            pImagePanel.Size = new Size {
+                Height = pImagePanel.Height + nHeight,
+                Width = pImagePanel.Width + nWidth
             };
 
-            this.pTreeView.Size = new Size
-            {
-                Height = this.pTreeView.Height + nHeight,
-                Width = this.pTreeView.Width
+            pTreeView.Size = new Size {
+                Height = pTreeView.Height + nHeight,
+                Width = pTreeView.Width
             };
 
-            this.pEntryValue.Location = new Point
-            {
-                X = this.pEntryValue.Location.X + nWidth,
-                Y = this.pEntryValue.Location.Y
+            pEntryValue.Location = new Point {
+                X = pEntryValue.Location.X + nWidth,
+                Y = pEntryValue.Location.Y
             };
 
-            this.pPrevSize = this.Size;
-            this.pImageData.Size = this.pImagePanel.Size;
+            pPrevSize = Size;
+            pImageData.Size = pImagePanel.Size;
 
             RenderImageData(true);
         }
 
-        private void OnCollapseNodes(object sender, EventArgs e)
-        {
-            this.pTreeView.CollapseAll();
+        private void OnCollapseNodes(object sender, EventArgs e) {
+            pTreeView.CollapseAll();
         }
 
-        private void OnCopyNode(object sender, EventArgs e)
-        {
-            PackNode pNode = this.pTreeView.SelectedNode as PackNode;
-
-            if (pNode != null)
-            {
-                PackFileEntry pEntry = pNode.Tag as PackFileEntry;
-
-                if (pEntry != null)
-                {
+        private void OnCopyNode(object sender, EventArgs e) {
+            if (pTreeView.SelectedNode is PackNode pNode) {
+                if (pNode.Tag is PackFileEntry pEntry) {
                     // Clear any current data from clipboard.
                     Clipboard.Clear();
                     // Copy the new copied entry object to clipboard.
                     Clipboard.SetData(PackFileEntry.DATA_FORMAT, pEntry.CreateCopy());
-                } else
-                {
-                    PackNodeList pList = pNode.Tag as PackNodeList;
-
-                    if (pList != null)
-                    {
-                        // Currently, for memory effieciency's sake, we will only copy
-                        // the entries of this directory, and not recursively copy all
-                        // sub-directories and their own entries.
-
+                } else {
+                    if (pNode.Tag is PackNodeList pList) {
                         PackNodeList pListCopy = new PackNodeList(pList.Directory);
-                        foreach (PackFileEntry pChild in pList.Entries.Values)
-                        {
-                            // Decrypt the data because we could potentially be moving
-                            // the object across repacker instances.
-                            byte[] pBlock = CryptoMan.DecryptData(pChild.FileHeader, this.pDataMappedMemFile);
-
-                            // Add a completely cloned reference of this entry, with a
-                            // new decrypted data block assigned and changed marked true.
+                        foreach (PackFileEntry pChild in pList.Entries.Values) {
+                            byte[] pBlock = CryptoMan.DecryptData(pChild.FileHeader, pDataMappedMemFile);
                             pListCopy.Entries.Add(pChild.TreeName, pChild.CreateCopy(pBlock));
                         }
-
-                        // Finally, copy the new node list to clipboard.
                         Clipboard.Clear();
                         Clipboard.SetData(PackNodeList.DATA_FORMAT, pListCopy);
                     }
                 }
-            } else
-            {
+            } else {
                 NotifyMessage("Please select the node you wish to copy.", MessageBoxIcon.Exclamation);
             }
         }
 
-        private void OnDoubleClickNode(object sender, TreeNodeMouseClickEventArgs e)
-        {
-            PackNode pNode = pTreeView.SelectedNode as PackNode;
-            if (pNode == null || pNode.Nodes.Count != 0)
+        private void OnDoubleClickNode(object sender, TreeNodeMouseClickEventArgs e) {
+            if (!(pTreeView.SelectedNode is PackNode pNode) || pNode.Nodes.Count != 0) {
                 return;
+            }
+
             object pObj = pNode.Tag;
 
-            if (pObj is PackNodeList)
-            {
+            if (pObj is PackNodeList) {
                 PackNodeList pList = pObj as PackNodeList;
 
                 // Iterate all further directories within the list
-                foreach (KeyValuePair<string, PackNodeList> pChild in pList.Children)
-                {
+                foreach (KeyValuePair<string, PackNodeList> pChild in pList.Children) {
                     pNode.Nodes.Add(new PackNode(pChild.Value, pChild.Key));
                 }
 
                 // Iterate entries
-                foreach (PackFileEntry pEntry in pList.Entries.Values)
-                {
+                foreach (PackFileEntry pEntry in pList.Entries.Values) {
                     pNode.Nodes.Add(new PackNode(pEntry, pEntry.TreeName));
                 }
 
@@ -300,94 +314,72 @@ namespace Orion.Window
 
                 if (pFileHeader != null)
                 {
-                    byte[] pBuffer = CryptoMan.DecryptData(pFileHeader, this.pDataMappedMemFile);
+                    byte[] pBuffer = CryptoMan.DecryptData(pFileHeader, pDataMappedMemFile);
 
                     UpdatePanel(pEntry.TreeName.Split('.')[1].ToLower(), pBuffer);
                 }
             }*/
         }
 
-        private void OnExit(object sender, EventArgs e)
-        {
+        private void OnExit(object sender, EventArgs e) {
             Application.Exit();
         }
 
-        private void OnExpandNodes(object sender, EventArgs e)
-        {
-            this.pTreeView.ExpandAll();
+        private void OnExpandNodes(object sender, EventArgs e) {
+            pTreeView.ExpandAll();
         }
 
-        private void OnExport(object sender, EventArgs e)
-        {
-            PackNode pNode = this.pTreeView.SelectedNode as PackNode;
-
-            if (pNode != null)
-            {
-                if (pNode.Tag is PackNodeList)
-                {
-                    FolderBrowserDialog pDialog = new FolderBrowserDialog
-                    {
+        private void OnExport(object sender, EventArgs e) {
+            if (pTreeView.SelectedNode is PackNode pNode) {
+                if (pNode.Tag is PackNodeList) {
+                    FolderBrowserDialog pDialog = new FolderBrowserDialog {
                         Description = "Select the destination folder to export to"
                     };
 
-                    if (pDialog.ShowDialog() == DialogResult.OK)
-                    {
+                    if (pDialog.ShowDialog() == DialogResult.OK) {
                         StringBuilder sPath = new StringBuilder(Dir_BackSlashToSlash(pDialog.SelectedPath)).Append("/");
                         PackNode pParent = pNode.Parent as PackNode;
-                        while (pParent != null && pParent.Tag is PackNodeList)
-                        {
+                        while (pParent != null && pParent.Tag is PackNodeList) {
                             sPath.Append(pParent.Name);
 
                             pParent = pParent.Parent as PackNode;
                         }
                         sPath.Append(pNode.Name);
 
-                        OnExportNodeList(sPath.ToString(), pNode, pNode.Tag as PackNodeList);
+                        OnExportNodeList(sPath.ToString(), pNode.Tag as PackNodeList);
 
                         NotifyMessage(string.Format("Successfully exported to {0}", sPath), MessageBoxIcon.Information);
                     }
-                }
-                else if (pNode.Tag is PackStreamVerBase)
-                {
-                    FolderBrowserDialog pDialog = new FolderBrowserDialog
-                    {
+                } else if (pNode.Tag is IPackStreamVerBase) {
+                    FolderBrowserDialog pDialog = new FolderBrowserDialog {
                         Description = "Select the destination folder to export to"
                     };
 
-                    if (pDialog.ShowDialog() == DialogResult.OK)
-                    {
+                    if (pDialog.ShowDialog() == DialogResult.OK) {
                         StringBuilder sPath = new StringBuilder(Dir_BackSlashToSlash(pDialog.SelectedPath));
                         sPath.Append("/");
                         sPath.Append(pNode.Name);
                         sPath.Append("/");
                         // Create root directory
-                        if (!Directory.Exists(sPath.ToString()))
-                        {
+                        if (!Directory.Exists(sPath.ToString())) {
                             Directory.CreateDirectory(sPath.ToString());
                         }
 
-                        foreach (PackNode pRootChild in pNode.Nodes)
-                        {
-                            if (pRootChild.Tag != null && pRootChild.Tag is PackNodeList)
-                            {
-                                OnExportNodeList(sPath.ToString() + pRootChild.Name, pRootChild, pRootChild.Tag as PackNodeList);
-                            } else if (pRootChild.Tag != null && pRootChild.Tag is PackFileEntry)
-                            {
+                        foreach (PackNode pRootChild in pNode.Nodes) {
+                            if (pRootChild.Tag != null && pRootChild.Tag is PackNodeList) {
+                                OnExportNodeList(sPath.ToString() + pRootChild.Name, pRootChild.Tag as PackNodeList);
+                            } else if (pRootChild.Tag != null && pRootChild.Tag is PackFileEntry) {
                                 PackFileEntry pEntry = pRootChild.Tag as PackFileEntry;
-                                PackFileHeaderVerBase pFileHeader = pEntry.FileHeader;
-                                if (pFileHeader != null)
-                                {
+                                IPackFileHeaderVerBase pFileHeader = pEntry.FileHeader;
+                                if (pFileHeader != null) {
                                     PackNode pChild = new PackNode(pEntry, pEntry.TreeName);
-                                    if (pChild.Data == null)
-                                    {
-                                        pChild.Data = CryptoMan.DecryptData(pFileHeader, this.pDataMappedMemFile);
+                                    if (pChild.Data == null) {
+                                        pChild.Data = CryptoMan.DecryptData(pFileHeader, pDataMappedMemFile);
                                         File.WriteAllBytes(sPath + pChild.Name, pChild.Data);
 
                                         // Nullify the data as it was previously.
                                         pChild.Data = null;
-                                    }
-                                    else
-                                    {
+                                    } else {
                                         File.WriteAllBytes(sPath + pChild.Name, pChild.Data);
                                     }
                                 }
@@ -396,34 +388,27 @@ namespace Orion.Window
 
                         NotifyMessage(string.Format("Successfully exported to {0}", sPath), MessageBoxIcon.Information);
                     }
-                } else if (pNode.Tag is PackFileEntry)
-                {
+                } else if (pNode.Tag is PackFileEntry) {
                     PackFileEntry pEntry = pNode.Tag as PackFileEntry;
                     string sName = pEntry.TreeName.Split('.')[0];
                     string sExtension = pEntry.TreeName.Split('.')[1];
 
-                    SaveFileDialog pDialog = new SaveFileDialog
-                    {
+                    SaveFileDialog pDialog = new SaveFileDialog {
                         Title = "Select the destination to export the file",
                         FileName = sName,
                         Filter = string.Format("{0} File|*.{1}", sExtension.ToUpper(), sExtension)
                     };
 
-                    if (pDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        PackFileHeaderVerBase pFileHeader = pEntry.FileHeader;
-                        if (pFileHeader != null)
-                        {
-                            if (pNode.Data == null)
-                            {
-                                pNode.Data = CryptoMan.DecryptData(pFileHeader, this.pDataMappedMemFile);
+                    if (pDialog.ShowDialog() == DialogResult.OK) {
+                        IPackFileHeaderVerBase pFileHeader = pEntry.FileHeader;
+                        if (pFileHeader != null) {
+                            if (pNode.Data == null) {
+                                pNode.Data = CryptoMan.DecryptData(pFileHeader, pDataMappedMemFile);
                                 File.WriteAllBytes(pDialog.FileName, pNode.Data);
 
                                 // Nullify the data as it was previously.
                                 pNode.Data = null;
-                            }
-                            else
-                            {
+                            } else {
                                 File.WriteAllBytes(pDialog.FileName, pNode.Data);
                             }
                         }
@@ -431,81 +416,65 @@ namespace Orion.Window
                         NotifyMessage(string.Format("Successfully exported to {0}", pDialog.FileName), MessageBoxIcon.Information);
                     }
                 }
-            } else
-            {
+            } else {
                 NotifyMessage("Please select a file to export.", MessageBoxIcon.Asterisk);
             }
         }
 
-        private void OnExportNodeList(string sDir, PackNode pNode, PackNodeList pList)
-        {
-            if (!Directory.Exists(sDir))
-            {
+        private void OnExportNodeList(string sDir, PackNodeList pList) {
+            if (!Directory.Exists(sDir)) {
                 Directory.CreateDirectory(sDir);
             }
 
-            foreach (KeyValuePair<string, PackNodeList> pChild in pList.Children)
-            {
-                PackNode pGrandChild = new PackNode(pChild.Value, pChild.Key);
-                if (!Directory.Exists(sDir + pChild.Key))
-                {
+            foreach (KeyValuePair<string, PackNodeList> pChild in pList.Children) {
+                //PackNode pGrandChild = new PackNode(pChild.Value, pChild.Key);
+                if (!Directory.Exists(sDir + pChild.Key)) {
                     Directory.CreateDirectory(sDir + pChild.Key);
                 }
-                OnExportNodeList(sDir + pChild.Key, pGrandChild, pChild.Value);
+                OnExportNodeList(sDir + pChild.Key, pChild.Value);
             }
 
-            foreach (PackFileEntry pEntry in pList.Entries.Values)
-            {
-                PackFileHeaderVerBase pFileHeader = pEntry.FileHeader;
-                if (pFileHeader != null)
-                {
+            foreach (PackFileEntry pEntry in pList.Entries.Values) {
+                IPackFileHeaderVerBase pFileHeader = pEntry.FileHeader;
+                if (pFileHeader != null) {
                     PackNode pChild = new PackNode(pEntry, pEntry.TreeName);
-                    if (pChild.Data == null)
-                    {
-                        pChild.Data = CryptoMan.DecryptData(pFileHeader, this.pDataMappedMemFile);
+                    if (pChild.Data == null) {
+                        pChild.Data = CryptoMan.DecryptData(pFileHeader, pDataMappedMemFile);
                         File.WriteAllBytes(sDir + pChild.Name, pChild.Data);
 
                         // Nullify the data as it was previously.
                         pChild.Data = null;
-                    }
-                    else
-                    {
+                    } else {
                         File.WriteAllBytes(sDir + pChild.Name, pChild.Data);
                     }
                 }
             }
         }
 
-        private void OnLoadFile(object sender, EventArgs e)
-        {
-            if (this.pNodeList != null)
-            {
+        private void OnLoadFile(object sender, EventArgs e) {
+            if (pNodeList != null) {
                 NotifyMessage("Please unload the current file first.", MessageBoxIcon.Information);
                 return;
             }
 
-            OpenFileDialog pDialog = new OpenFileDialog()
-            {
+            OpenFileDialog pDialog = new OpenFileDialog() {
                 Title = "Select the MS2 file to load",
                 Filter = "MapleStory2 Files|*.m2d",
                 Multiselect = false
             };
 
-            if (pDialog.ShowDialog() == DialogResult.OK)
-            {
+            if (pDialog.ShowDialog() == DialogResult.OK) {
                 string sDataUOL = Dir_BackSlashToSlash(pDialog.FileName);
-                this.sHeaderUOL = sDataUOL.Replace(".m2d", ".m2h");
+                sHeaderUOL = sDataUOL.Replace(".m2d", ".m2h");
 
-                if (!File.Exists(this.sHeaderUOL))
-                {
-                    string sHeaderName = this.sHeaderUOL.Substring(this.sHeaderUOL.LastIndexOf('/') + 1);
+                if (!File.Exists(sHeaderUOL)) {
+                    string sHeaderName = sHeaderUOL.Substring(sHeaderUOL.LastIndexOf('/') + 1);
                     NotifyMessage(string.Format("Unable to load the {0} file.\r\nPlease make sure it exists and is not being used.", sHeaderName), MessageBoxIcon.Error);
                     return;
                 }
 
-                PackStreamVerBase pStream;
-                using (BinaryReader pHeader = new BinaryReader(File.OpenRead(this.sHeaderUOL)))
-                {
+                IPackStreamVerBase pStream;
+                using (BinaryReader pHeader = new BinaryReader(File.OpenRead(sHeaderUOL))) {
                     // Construct a new packed stream from the header data
                     pStream = PackVer.CreatePackVer(pHeader);
 
@@ -514,35 +483,29 @@ namespace Orion.Window
                     pStream.GetFileList().AddRange(PackFileEntry.CreateFileList(Encoding.UTF8.GetString(CryptoMan.DecryptFileString(pStream, pHeader.BaseStream))));
                     // Make the collection of files sorted by their FileIndex for easy fetching
                     pStream.GetFileList().Sort();
-                    
+
                     // Load the file allocation table and assign each file header to the entry within the list
                     byte[] pFileTable = CryptoMan.DecryptFileTable(pStream, pHeader.BaseStream);
-                    using (MemoryStream pTableStream = new MemoryStream(pFileTable))
-                    {
-                        using (BinaryReader pReader = new BinaryReader(pTableStream))
-                        {
-                            PackFileHeaderVerBase pFileHeader;
+                    using (MemoryStream pTableStream = new MemoryStream(pFileTable)) {
+                        using (BinaryReader pReader = new BinaryReader(pTableStream)) {
+                            IPackFileHeaderVerBase pFileHeader;
 
-                            switch (pStream.GetVer())
-                            {
+                            switch (pStream.GetVer()) {
                                 case PackVer.MS2F:
-                                    for (ulong i = 0; i < pStream.GetFileListCount(); i++)
-                                    {
+                                    for (ulong i = 0; i < pStream.GetFileListCount(); i++) {
                                         pFileHeader = new PackFileHeaderVer1(pReader);
                                         pStream.GetFileList()[pFileHeader.GetFileIndex() - 1].FileHeader = pFileHeader;
                                     }
                                     break;
                                 case PackVer.NS2F:
-                                    for (ulong i = 0; i < pStream.GetFileListCount(); i++)
-                                    {
+                                    for (ulong i = 0; i < pStream.GetFileListCount(); i++) {
                                         pFileHeader = new PackFileHeaderVer2(pReader);
                                         pStream.GetFileList()[pFileHeader.GetFileIndex() - 1].FileHeader = pFileHeader;
                                     }
                                     break;
                                 case PackVer.OS2F:
                                 case PackVer.PS2F:
-                                    for (ulong i = 0; i < pStream.GetFileListCount(); i++)
-                                    {
+                                    for (ulong i = 0; i < pStream.GetFileListCount(); i++) {
                                         pFileHeader = new PackFileHeaderVer3(pStream.GetVer(), pReader);
                                         pStream.GetFileList()[pFileHeader.GetFileIndex() - 1].FileHeader = pFileHeader;
                                     }
@@ -552,23 +515,19 @@ namespace Orion.Window
                     }
                 }
 
-                this.pDataMappedMemFile = MemoryMappedFile.CreateFromFile(sDataUOL);
+                pDataMappedMemFile = MemoryMappedFile.CreateFromFile(sDataUOL);
 
                 InitializeTree(pStream);
             }
         }
 
-        private void OnPasteNode(object sender, EventArgs e)
-        {
+        private void OnPasteNode(object sender, EventArgs e) {
             IDataObject pData = Clipboard.GetDataObject();
-            if (pData == null)
-            {
+            if (pData == null) {
                 return;
             }
 
-            PackNode pNode = this.pTreeView.SelectedNode as PackNode;
-            if (pNode != null)
-            {
+            if (pTreeView.SelectedNode is PackNode pNode) {
                 if (pNode.Tag is PackFileEntry) //wtf are they thinking?
                 {
                     NotifyMessage("Please select a directory to paste into!", MessageBoxIcon.Exclamation);
@@ -576,36 +535,32 @@ namespace Orion.Window
                 }
 
                 object pObj;
-                if (pData.GetDataPresent(PackFileEntry.DATA_FORMAT))
-                {
+                if (pData.GetDataPresent(PackFileEntry.DATA_FORMAT)) {
                     pObj = (PackFileEntry)pData.GetData(PackFileEntry.DATA_FORMAT);
-                }
-                else if (pData.GetDataPresent(PackNodeList.DATA_FORMAT))
-                {
+                } else if (pData.GetDataPresent(PackNodeList.DATA_FORMAT)) {
                     pObj = (PackNodeList)pData.GetData(PackNodeList.DATA_FORMAT);
-                } else
-                {
+                } else {
                     NotifyMessage("No files or directories are currently copied to clipboard.", MessageBoxIcon.Exclamation);
                     return;
                 }
 
                 PackNodeList pList;
-                if (pNode.Level == 0)
-                {
+                if (pNode.Level == 0) {
                     // If they're trying to add to the root of the file,
                     // then just use the root node list of this tree.
-                    pList = this.pNodeList;
-                } else
-                {
+                    pList = pNodeList;
+                } else {
                     pList = pNode.Tag as PackNodeList;
                 }
 
-                if (pList != null && pObj != null)
-                {
-                    if (pObj is PackFileEntry)
-                    {
+                if (pList != null && pObj != null) {
+                    if (pObj is PackFileEntry) {
                         PackFileEntry pEntry = pObj as PackFileEntry;
 
+                        if (pList.Entries.ContainsKey(pEntry.TreeName)) {
+                            NotifyMessage("File name already exists in directory.", MessageBoxIcon.Exclamation);
+                            return;
+                        }
                         AddFileEntry(pEntry);
                         pList.Entries.Add(pEntry.TreeName, pEntry);
 
@@ -613,16 +568,14 @@ namespace Orion.Window
                         pNode.Nodes.Add(pChild);
 
                         pEntry.Name = pChild.Path;
-                    } else if (pObj is PackNodeList)
-                    {
+                    } else if (pObj is PackNodeList) {
                         PackNodeList pChildList = pObj as PackNodeList;
 
                         PackNode pChild = new PackNode(pChildList, pChildList.Directory);
                         pList.Children.Add(pChildList.Directory, pChildList);
                         pNode.Nodes.Add(pChild);
 
-                        foreach (PackFileEntry pEntry in pChildList.Entries.Values)
-                        {
+                        foreach (PackFileEntry pEntry in pChildList.Entries.Values) {
                             AddFileEntry(pEntry);
                             PackNode pListNode = new PackNode(pEntry, pEntry.TreeName);
                             pChild.Nodes.Add(pListNode);
@@ -634,141 +587,88 @@ namespace Orion.Window
             }
         }
 
-        private void OnReloadFile(object sender, EventArgs e)
-        {
-            if (this.pNodeList != null)
-            {
-                PackStreamVerBase pStream;
+        private void OnReloadFile(object sender, EventArgs e) {
+            if (pNodeList != null) {
+                IPackStreamVerBase pStream;
 
-                if (this.pTreeView.Nodes.Count > 0)
-                {
-                    pStream = this.pTreeView.Nodes[0].Tag as PackStreamVerBase;
-                    if (pStream == null)
-                    {
+                if (pTreeView.Nodes.Count > 0) {
+                    pStream = pTreeView.Nodes[0].Tag as IPackStreamVerBase;
+                    if (pStream == null) {
                         return;
                     }
 
-                    this.pTreeView.Nodes.Clear();
-                    this.pTreeView.Refresh();
+                    pTreeView.Nodes.Clear();
+                    pTreeView.Refresh();
 
                     InitializeTree(pStream);
                     UpdatePanel("Empty", null);
                 }
-            } else
-            {
+            } else {
                 NotifyMessage("There is no package to be reloaded.", MessageBoxIcon.Warning);
             }
         }
 
-        private void OnRemoveFile(object sender, EventArgs e)
-        {
-            PackNode pNode = this.pTreeView.SelectedNode as PackNode;
-            if (pNode != null)
-            {
-                PackNode pRoot = this.pTreeView.Nodes[0] as PackNode;
-                if (pRoot != null && pNode != pRoot)
-                {
-                    PackStreamVerBase pStream = pRoot.Tag as PackStreamVerBase;
-                    if (pStream != null)
-                    {
-                        PackFileEntry pEntry = pNode.Tag as PackFileEntry;
-                        if (pEntry != null)
-                        {
+        private void OnRemoveFile(object sender, EventArgs e) {
+            if (pTreeView.SelectedNode is PackNode pNode) {
+                if (pTreeView.Nodes[0] is PackNode pRoot && pNode != pRoot) {
+                    if (pRoot.Tag is IPackStreamVerBase pStream) {
+                        if (pNode.Tag is PackFileEntry pEntry) {
                             pStream.GetFileList().Remove(pEntry);
-
-                            if (pNode.Parent == pRoot as TreeNode)
-                            {
-                                this.pNodeList.Entries.Remove(pEntry.TreeName);
-                            } else
-                            {
+                            if (pNode.Parent == pRoot as TreeNode) {
+                                pNodeList.Entries.Remove(pEntry.TreeName);
+                            } else {
                                 (pNode.Parent.Tag as PackNodeList).Entries.Remove(pEntry.TreeName);
                             }
                             pNode.Parent.Nodes.Remove(pNode);
-                        } else if (pNode.Tag is PackNodeList)
-                        {
-                            string sWarning = "WARNING: You are about to delete an entire directory!"
-                                    + "\r\nBy deleting this directory, all inner directories and entries will also be removed."
-                                    + "\r\n\r\nAre you sure you want to continue?";
-                            if (MessageBox.Show(this, sWarning, this.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
-                            {
-                                // Recursively remove all inner directories and entries.
+                        } else if (pNode.Tag is PackNodeList) {
+                            string sWarning = "WARNING: You are about to delete an entire directory!" + "\r\nBy deleting this directory, all inner directories and entries will also be removed." + "\r\n\r\nAre you sure you want to continue?";
+                            if (MessageBox.Show(this, sWarning, Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) {
                                 RemoveDirectory(pNode, pStream);
-                                // Remove the entire node list child from the parent list.
-                                if (pNode.Parent == pRoot as TreeNode)
-                                {
-                                    this.pNodeList.Children.Remove(pNode.Name);
-                                } else
-                                {
+                                if (pNode.Parent == pRoot as TreeNode) {
+                                    pNodeList.Children.Remove(pNode.Name);
+                                } else {
                                     (pNode.Parent.Tag as PackNodeList).Children.Remove(pNode.Name);
                                 }
-                                // Remove the node and all of its children from tree.
                                 pNode.Remove();
                             }
                         }
                     }
                 }
-            } else
-            {
+            } else {
                 NotifyMessage("Please select a file or directory to remove.", MessageBoxIcon.Exclamation);
             }
         }
 
-        private void OnSaveBegin(object sender, DoWorkEventArgs e)
-        {
-            BackgroundWorker pWorker = sender as BackgroundWorker;
-
-            if (pWorker != null)
-            {
-                PackStreamVerBase pStream = this.pProgress.Stream;
-                if (pStream == null)
-                {
+        private void OnSaveBegin(object sender, DoWorkEventArgs e) {
+            if (sender is BackgroundWorker) {
+                IPackStreamVerBase pStream = pProgress.Stream;
+                if (pStream == null) {
                     return;
                 }
-                // Start the elapsed time progress stopwatch
-                this.pProgress.Start();
-
-                // Re-calculate the file list in case of index removal
+                pProgress.Start();
                 pStream.GetFileList().Sort();
-
-                // Save the data blocks to file and re-calculate all entries
-                SaveData(this.pProgress.Path, pStream.GetFileList());
-
-                // Declare the new file count (header update)
+                SaveData(pProgress.Path, pStream.GetFileList());
                 uint dwFileCount = (uint)pStream.GetFileList().Count;
-
-                // Construct a raw string containing the new file list information
                 StringBuilder sFileString = new StringBuilder();
-                foreach (PackFileEntry pEntry in pStream.GetFileList())
-                {
+                foreach (PackFileEntry pEntry in pStream.GetFileList()) {
                     sFileString.Append(pEntry.ToString());
                 }
-                this.pSaveWorkerThread.ReportProgress(96);
-
-                // Encrypt the file list and output the new header sizes (header update)
+                pSaveWorkerThread.ReportProgress(96);
                 byte[] pFileString = Encoding.UTF8.GetBytes(sFileString.ToString().ToCharArray());
                 byte[] pHeader = CryptoMan.Encrypt(pStream.GetVer(), pFileString, BufferManipulation.AES_ZLIB, out uint uHeaderLen, out uint uCompressedHeaderLen, out uint uEncodedHeaderLen);
-                this.pSaveWorkerThread.ReportProgress(97);
-
-                // Construct a new file allocation table
+                pSaveWorkerThread.ReportProgress(97);
                 byte[] pFileTable;
-                using (MemoryStream pOutStream = new MemoryStream())
-                {
-                    using (BinaryWriter pWriter = new BinaryWriter(pOutStream))
-                    {
-                        foreach (PackFileEntry pEntry in pStream.GetFileList())
-                        {
+                using (MemoryStream pOutStream = new MemoryStream()) {
+                    using (BinaryWriter pWriter = new BinaryWriter(pOutStream)) {
+                        foreach (PackFileEntry pEntry in pStream.GetFileList()) {
                             pEntry.FileHeader.Encode(pWriter);
                         }
                     }
                     pFileTable = pOutStream.ToArray();
                 }
-                this.pSaveWorkerThread.ReportProgress(98);
-
-                // Encrypt the file table and output the new data sizes (header update)
+                pSaveWorkerThread.ReportProgress(98);
                 pFileTable = CryptoMan.Encrypt(pStream.GetVer(), pFileTable, BufferManipulation.AES_ZLIB, out uint uDataLen, out uint uCompressedDataLen, out uint uEncodedDataLen);
-                this.pSaveWorkerThread.ReportProgress(99);
-
-                // Update all header sizes to the new file list information
+                pSaveWorkerThread.ReportProgress(99);
                 pStream.SetFileListCount(dwFileCount);
                 pStream.SetHeaderSize(uHeaderLen);
                 pStream.SetCompressedHeaderSize(uCompressedHeaderLen);
@@ -776,43 +676,26 @@ namespace Orion.Window
                 pStream.SetDataSize(uDataLen);
                 pStream.SetCompressedDataSize(uCompressedDataLen);
                 pStream.SetEncodedDataSize(uEncodedDataLen);
-
-                // Write the new header data to stream
-                using (BinaryWriter pWriter = new BinaryWriter(File.Create(this.pProgress.Path.Replace(".m2d", ".m2h"))))
-                {
-                    // Encode the file version (MS2F,NS2F,etc)
+                using (BinaryWriter pWriter = new BinaryWriter(File.Create(pProgress.Path.Replace(".m2d", ".m2h")))) {
                     pWriter.Write(pStream.GetVer());
-
-                    // Encode the stream header information
                     pStream.Encode(pWriter);
-
-                    // Encode the encrypted header and file table buffers
                     pWriter.Write(pHeader);
                     pWriter.Write(pFileTable);
                 }
-                this.pSaveWorkerThread.ReportProgress(100);
+                pSaveWorkerThread.ReportProgress(100);
             }
         }
 
-        private void OnSaveChanges(object sender, EventArgs e)
-        {
-            if (!this.pUpdateDataBtn.Visible)
-            {
+        private void OnSaveChanges(object sender, EventArgs e) {
+            if (!pUpdateDataBtn.Visible) {
                 return;
             }
 
-            PackNode pNode = this.pTreeView.SelectedNode as PackNode;
-            if (pNode != null && pNode.Data != null)
-            {
-                PackFileEntry pEntry = pNode.Tag as PackFileEntry;
-                
-                if (pEntry != null)
-                {
-                    string sData = this.pTextData.Text;
+            if (pTreeView.SelectedNode is PackNode pNode && pNode.Data != null) {
+                if (pNode.Tag is PackFileEntry pEntry) {
+                    string sData = pTextData.Text;
                     byte[] pData = Encoding.UTF8.GetBytes(sData.ToCharArray());
-
-                    if (pNode.Data != pData)
-                    {
+                    if (pNode.Data != pData) {
                         pEntry.Data = pData;
                         pEntry.Changed = true;
                     }
@@ -820,165 +703,123 @@ namespace Orion.Window
             }
         }
 
-        private void OnSaveComplete(object sender, RunWorkerCompletedEventArgs e)
-        {
-            if (e.Error != null)
-            {
-                MessageBox.Show(this.pProgress, e.Error.Message, this.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        private void OnSaveComplete(object sender, RunWorkerCompletedEventArgs e) {
+            if (e.Error != null) {
+                MessageBox.Show(pProgress, e.Error.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            this.pProgress.Finish();
-            this.pProgress.Close();
-            
-            TimeSpan pInterval = TimeSpan.FromMilliseconds(this.pProgress.ElapsedTime);
+            pProgress.Finish();
+            pProgress.Close();
+
+            TimeSpan pInterval = TimeSpan.FromMilliseconds(pProgress.ElapsedTime);
             NotifyMessage(string.Format("Successfully saved in {0} minutes and {1} seconds!", pInterval.Minutes, pInterval.Seconds), MessageBoxIcon.Information);
 
             // Perform heavy cleanup
             System.GC.Collect();
         }
 
-        private void OnSaveFile(object sender, EventArgs e)
-        {
-            PackNode pNode = this.pTreeView.SelectedNode as PackNode;
-
-            if (pNode != null && pNode.Tag is PackStreamVerBase)
-            {
-                SaveFileDialog pDialog = new SaveFileDialog
-                {
+        private void OnSaveFile(object sender, EventArgs e) {
+            if (pTreeView.SelectedNode is PackNode pNode && pNode.Tag is IPackStreamVerBase) {
+                SaveFileDialog pDialog = new SaveFileDialog {
                     Title = "Select the destination to save the file",
                     Filter = "MapleStory2 Files|*.m2d"
                 };
 
-                if (pDialog.ShowDialog() == DialogResult.OK)
-                {
+                if (pDialog.ShowDialog() == DialogResult.OK) {
                     string sPath = Dir_BackSlashToSlash(pDialog.FileName);
 
-                    if (!pSaveWorkerThread.IsBusy)
-                    {
-                        this.pProgress = new ProgressWindow
-                        {
+                    if (!pSaveWorkerThread.IsBusy) {
+                        pProgress = new ProgressWindow {
                             Path = sPath,
-                            Stream = (pNode.Tag as PackStreamVerBase)
+                            Stream = (pNode.Tag as IPackStreamVerBase)
                         };
-                        this.pProgress.Show(this);
+                        pProgress.Show(this);
                         // Why do you make this so complicated C#? 
-                        int x = this.DesktopBounds.Left + (this.Width - this.pProgress.Width) / 2;
-                        int y = this.DesktopBounds.Top + (this.Height - this.pProgress.Height) / 2;
-                        this.pProgress.SetDesktopLocation(x, y);
+                        int x = DesktopBounds.Left + (Width - pProgress.Width) / 2;
+                        int y = DesktopBounds.Top + (Height - pProgress.Height) / 2;
+                        pProgress.SetDesktopLocation(x, y);
 
-                        this.pSaveWorkerThread.RunWorkerAsync();
+                        pSaveWorkerThread.RunWorkerAsync();
                     }
                 }
-            } else
-            {
+            } else {
                 NotifyMessage("Please select a Packed Data File file to save.", MessageBoxIcon.Information);
             }
         }
 
-        private void OnSaveProgress(object sender, ProgressChangedEventArgs e)
-        {
-            this.pProgress.UpdateProgressBar(e.ProgressPercentage);
+        private void OnSaveProgress(object sender, ProgressChangedEventArgs e) {
+            pProgress.UpdateProgressBar(e.ProgressPercentage);
         }
 
-        private void OnSearch(object sender, EventArgs e)
-        {
+        private void OnSearch(object sender, EventArgs e) {
             // TODO: Implement Scintilla SearchManager
             NotifyMessage("Coming Soon in a future update!", MessageBoxIcon.Information);
         }
 
-        private void OnSelectNode(object sender, TreeViewEventArgs e)
-        {
-            PackNode pNode = this.pTreeView.SelectedNode as PackNode;
-
-            if (pNode != null)
-            {
+        private void OnSelectNode(object sender, TreeViewEventArgs e) {
+            if (pTreeView.SelectedNode is PackNode pNode) {
                 object pObj = pNode.Tag;
-
-                this.pEntryName.Visible = true;
-                this.pEntryName.Text = pNode.Name;
-
-                if (pObj is PackNodeList)
-                {
+                pEntryName.Visible = true;
+                pEntryName.Text = pNode.Name;
+                if (pObj is PackNodeList) {
                     UpdatePanel("Packed Directory", null);
-                } else if (pObj is PackFileEntry)
-                {
+                } else if (pObj is PackFileEntry) {
                     PackFileEntry pEntry = pObj as PackFileEntry;
-                    PackFileHeaderVerBase pFileHeader = pEntry.FileHeader;
-
-                    if (pFileHeader != null)
-                    {
-                        if (pNode.Data == null)
-                        {
-                            // TODO: Improve memory efficiency here and dispose of the data if
-                            // it's unchanged once they select a different node in the tree.
-                            pNode.Data = CryptoMan.DecryptData(pFileHeader, this.pDataMappedMemFile);
+                    IPackFileHeaderVerBase pFileHeader = pEntry.FileHeader;
+                    if (pFileHeader != null) {
+                        if (pNode.Data == null) {
+                            pNode.Data = CryptoMan.DecryptData(pFileHeader, pDataMappedMemFile);
                         }
                     }
-
                     UpdatePanel(pEntry.TreeName.Split('.')[1].ToLower(), pNode.Data);
-                }
-                else if (pObj is PackStreamVerBase)
-                {
+                } else if (pObj is IPackStreamVerBase) {
                     UpdatePanel("Packed Data File", null);
-                } else
-                {
+                } else {
                     UpdatePanel("Empty", null);
                 }
             }
         }
 
-        private void OnUnloadFile(object sender, EventArgs e)
-        {
-            if (this.pNodeList != null)
-            {
+        private void OnUnloadFile(object sender, EventArgs e) {
+            if (pNodeList != null) {
                 pTreeView.Nodes.Clear();
 
-                this.pNodeList.InternalRelease();
-                this.pNodeList = null;
+                pNodeList.InternalRelease();
+                pNodeList = null;
 
-                this.sHeaderUOL = "";
+                sHeaderUOL = "";
 
-                if (this.pDataMappedMemFile != null)
-                {
-                    this.pDataMappedMemFile.Dispose();
-                    this.pDataMappedMemFile = null;
+                if (pDataMappedMemFile != null) {
+                    pDataMappedMemFile.Dispose();
+                    pDataMappedMemFile = null;
                 }
 
-                this.UpdatePanel("Empty", null);
+                UpdatePanel("Empty", null);
 
                 System.GC.Collect();
-            } else
-            {
+            } else {
                 NotifyMessage("There is no package to be unloaded.", MessageBoxIcon.Warning);
             }
         }
 
-        private void OnWindowClosing(object sender, FormClosingEventArgs e)
-        {
+        private void OnWindowClosing(object sender, FormClosingEventArgs e) {
             // Only ask for confirmation when the user has files open.
-            if (this.pTreeView.Nodes.Count > 0)
-            {
-                if (MessageBox.Show(this, "Are you sure you want to exit?", this.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
-                {
+            if (pTreeView.Nodes.Count > 0) {
+                if (MessageBox.Show(this, "Are you sure you want to exit?", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No) {
                     e.Cancel = true;
                 }
             }
         }
 
-        private void RemoveDirectory(PackNode pNode, PackStreamVerBase pStream)
-        {
-            if (pNode.Nodes.Count == 0)
-            {
-                if (pNode.Tag is PackNodeList)
-                {
+        private void RemoveDirectory(PackNode pNode, IPackStreamVerBase pStream) {
+            if (pNode.Nodes.Count == 0) {
+                if (pNode.Tag is PackNodeList) {
                     PackNodeList pList = pNode.Tag as PackNodeList;
 
-                    foreach (KeyValuePair<string, PackNodeList> pChild in pList.Children)
-                    {
+                    foreach (KeyValuePair<string, PackNodeList> pChild in pList.Children) {
                         pNode.Nodes.Add(new PackNode(pChild.Value, pChild.Key));
                     }
 
-                    foreach (PackFileEntry pEntry in pList.Entries.Values)
-                    {
+                    foreach (PackFileEntry pEntry in pList.Entries.Values) {
                         pNode.Nodes.Add(new PackNode(pEntry, pEntry.TreeName));
                     }
 
@@ -987,52 +828,43 @@ namespace Orion.Window
                 }
             }
 
-            foreach (PackNode pChild in pNode.Nodes)
-            {
+            foreach (PackNode pChild in pNode.Nodes) {
                 RemoveDirectory(pChild, pStream);
             }
 
-            if (pNode.Tag is PackFileEntry)
-            {
+            if (pNode.Tag is PackFileEntry) {
                 pStream.GetFileList().Remove(pNode.Tag as PackFileEntry);
             }
         }
 
-        private void RenderImageData(bool bChange)
-        {
-            this.pImageData.Visible = this.pImagePanel.Visible;
+        private void RenderImageData(bool bChange) {
+            pImageData.Visible = pImagePanel.Visible;
 
-            if (this.pImageData.Visible)
-            {
+            if (pImageData.Visible) {
                 // If the size of the bitmap image is bigger than the actual panel,
                 // then we adjust the image sizing mode to zoom the image in order
                 // to fit the full image within the current size of the panel.
-                if (this.pImageData.Image.Size.Height > this.pImagePanel.Size.Height || this.pImageData.Image.Size.Width > this.pImagePanel.Size.Width)
-                {
+                if (pImageData.Image.Size.Height > pImagePanel.Size.Height || pImageData.Image.Size.Width > pImagePanel.Size.Width) {
                     // If we went from selecting a small image to selecting a big image,
                     // then adjust the panel and data to fit the size of the new bitmap.
-                    if (!bChange)
-                    {
-                        this.OnChangeWindowSize(null, null);
+                    if (!bChange) {
+                        OnChangeWindowSize(null, null);
                     }
 
                     // Since the image is too big, scale it in zoom mode to fit it.
-                    this.pImageData.SizeMode = PictureBoxSizeMode.Zoom;
-                } else
-                {
+                    pImageData.SizeMode = PictureBoxSizeMode.Zoom;
+                } else {
                     // Since the image is less than or equal to the size of the panel,
                     // we are able to render the image as-is with no additional scaling.
-                    this.pImageData.SizeMode = PictureBoxSizeMode.Normal;
+                    pImageData.SizeMode = PictureBoxSizeMode.Normal;
                 }
 
                 // Render the new size changes.
-                this.pImageData.Update();
+                pImageData.Update();
             }
         }
 
-        private void SaveData(string sDataPath, List<PackFileEntry> aEntry)
-        {
-            List<PackFileEntry> aNewEntry = new List<PackFileEntry>();
+        private void SaveData(string sDataPath, List<PackFileEntry> aEntry) {
 
             // Declare MS2F as the initial version until specified.
             uint uVer = PackVer.MS2F;
@@ -1041,34 +873,26 @@ namespace Orion.Window
             // Re-calculate all file indexes from start to finish
             int nCurIndex = 1;
 
-            using (BinaryWriter pWriter = new BinaryWriter(File.Create(sDataPath)))
-            {
+            using (BinaryWriter pWriter = new BinaryWriter(File.Create(sDataPath))) {
                 // Iterate all file entries that exist
-                foreach (PackFileEntry pEntry in aEntry)
-                {
-                    PackFileHeaderVerBase pHeader = pEntry.FileHeader;
+                foreach (PackFileEntry pEntry in aEntry) {
+                    IPackFileHeaderVerBase pHeader = pEntry.FileHeader;
 
                     // If the entry was modified, or is new, write the modified data block
-                    if (pEntry.Changed)
-                    {
+                    if (pEntry.Changed) {
                         // If the header is null (new entry), then create one
-                        if (pHeader == null)
-                        {
+                        if (pHeader == null) {
                             // Hacky way of doing this, but this follows Nexon's current conventions.
                             uint dwBufferFlag;
-                            if (pEntry.Name.EndsWith(".usm"))
-                            {
+                            if (pEntry.Name.EndsWith(".usm")) {
                                 dwBufferFlag = BufferManipulation.XOR;
-                            } else if (pEntry.Name.EndsWith(".png"))
-                            {
+                            } else if (pEntry.Name.EndsWith(".png")) {
                                 dwBufferFlag = BufferManipulation.AES;
-                            } else
-                            {
+                            } else {
                                 dwBufferFlag = BufferManipulation.AES_ZLIB;
                             }
 
-                            switch (uVer)
-                            {
+                            switch (uVer) {
                                 case PackVer.MS2F:
                                     pHeader = PackFileHeaderVer1.CreateHeader(nCurIndex, dwBufferFlag, uOffset, pEntry.Data);
                                     break;
@@ -1082,9 +906,7 @@ namespace Orion.Window
                             }
                             // Update the entry's file header to the newly created one
                             pEntry.FileHeader = pHeader;
-                        }
-                        else
-                        {
+                        } else {
                             // If the header existed already, re-calculate the file index and offset.
                             pHeader.SetFileIndex(nCurIndex);
                             pHeader.SetOffset(uOffset);
@@ -1105,24 +927,19 @@ namespace Orion.Window
                         uOffset += pHeader.GetEncodedFileSize();
                     }
                     // If the entry is unchanged, parse the block from the original offsets
-                    else
-                    {
+                    else {
                         // Make sure the entry has a parsed file header from load
-                        if (pHeader != null)
-                        {
+                        if (pHeader != null) {
                             // Update the initial versioning before any future crypto calls
-                            if (pHeader.GetVer() != uVer)
-                            {
+                            if (pHeader.GetVer() != uVer) {
                                 uVer = pHeader.GetVer();
                             }
 
                             // Access the current encrypted block data from the memory map initially loaded
-                            using (MemoryMappedViewStream pBuffer = this.pDataMappedMemFile.CreateViewStream((long)pHeader.GetOffset(), (long)pHeader.GetEncodedFileSize()))
-                            {
+                            using (MemoryMappedViewStream pBuffer = pDataMappedMemFile.CreateViewStream((long)pHeader.GetOffset(), (long)pHeader.GetEncodedFileSize())) {
                                 byte[] pSrc = new byte[pHeader.GetEncodedFileSize()];
 
-                                if (pBuffer.Read(pSrc, 0, (int)pHeader.GetEncodedFileSize()) == pHeader.GetEncodedFileSize())
-                                {
+                                if (pBuffer.Read(pSrc, 0, (int)pHeader.GetEncodedFileSize()) == pHeader.GetEncodedFileSize()) {
                                     // Modify the header's file index to the updated offset after entry changes
                                     pHeader.SetFileIndex(nCurIndex);
                                     // Modify the header's offset to the updated offset after entry changes
@@ -1140,54 +957,45 @@ namespace Orion.Window
                         }
                     }
                     // Allow the remaining 5% for header file write progression
-                    this.pSaveWorkerThread.ReportProgress((int)(((double)(nCurIndex - 1) / (double)aEntry.Count) * 95.0d));
+                    pSaveWorkerThread.ReportProgress((int)(((double)(nCurIndex - 1) / (double)aEntry.Count) * 95.0d));
                 }
             }
         }
 
-        private void UpdatePanel(string sExtension, byte[] pBuffer)
-        {
-            if (pBuffer == null)
-            {
-                this.pEntryValue.Text = sExtension;
-                this.pEntryName.Visible = false;
-                this.pTextData.Visible = false;
-                this.pUpdateDataBtn.Visible = false;
-                this.pImagePanel.Visible = false;
-                this.pChangeImageBtn.Visible = false;
-            } else
-            {
-                this.pEntryValue.Text = string.Format("{0} File", sExtension.ToUpper());
-                this.pEntryName.Visible = true;
+        private void UpdatePanel(string sExtension, byte[] pBuffer) {
+            if (pBuffer == null) {
+                pEntryValue.Text = sExtension;
+                pEntryName.Visible = false;
+                pTextData.Visible = false;
+                pUpdateDataBtn.Visible = false;
+                pImagePanel.Visible = false;
+                pChangeImageBtn.Visible = false;
+            } else {
+                pEntryValue.Text = string.Format("{0} File", sExtension.ToUpper());
+                pEntryName.Visible = true;
 
-                this.pTextData.Visible = (sExtension.Equals("ini") || sExtension.Equals("nt") || sExtension.Equals("lua")
+                pTextData.Visible = (sExtension.Equals("ini") || sExtension.Equals("nt") || sExtension.Equals("lua")
                     || sExtension.Equals("xml") || sExtension.Equals("flat") || sExtension.Equals("xblock")
                     || sExtension.Equals("diagram") || sExtension.Equals("preset") || sExtension.Equals("emtproj"));
-                this.pUpdateDataBtn.Visible = this.pTextData.Visible;
+                pUpdateDataBtn.Visible = pTextData.Visible;
 
-                this.pImagePanel.Visible = (sExtension.Equals("png") || sExtension.Equals("dds"));
-                this.pChangeImageBtn.Visible = this.pImagePanel.Visible;
+                pImagePanel.Visible = (sExtension.Equals("png") || sExtension.Equals("dds"));
+                pChangeImageBtn.Visible = pImagePanel.Visible;
 
-                if (this.pTextData.Visible)
-                {
-                    this.pTextData.Text = Encoding.UTF8.GetString(pBuffer);
-                }
-                else if (this.pImagePanel.Visible)
-                {
+                if (pTextData.Visible) {
+                    pTextData.Text = Encoding.UTF8.GetString(pBuffer);
+                } else if (pImagePanel.Visible) {
                     Bitmap pImage;
-                    if (sExtension.Equals("png"))
-                    {
-                        using (MemoryStream pStream = new MemoryStream(pBuffer))
-                        {
+                    if (sExtension.Equals("png")) {
+                        using (MemoryStream pStream = new MemoryStream(pBuffer)) {
                             pImage = new Bitmap(pStream);
                         }
-                    }
-                    else //if (sExtension.Equals("dds"))
-                    {
+                    } else //if (sExtension.Equals("dds"))
+                      {
                         pImage = DDS.LoadImage(pBuffer);
                     }
 
-                    this.pImageData.Image = pImage;
+                    pImageData.Image = pImage;
                 }
             }
 
@@ -1204,19 +1012,16 @@ namespace Orion.Window
             RenderImageData(false);
         }
 
-        private void UpdateStyle(string sExtension)
-        {
-            if (sExtension.Equals("ini") || sExtension.Equals("nt"))
-            {
+        private void UpdateStyle(string sExtension) {
+            if (sExtension.Equals("ini") || sExtension.Equals("nt")) {
                 // Set the Styles to replicate Sublime
-                this.pTextData.StyleResetDefault();
-                this.pTextData.Styles[Style.Default].Font = "Consolas";
-                this.pTextData.Styles[Style.Default].Size = 10;
-                this.pTextData.Styles[Style.Default].BackColor = Color.FromArgb(0x282923);
-                this.pTextData.Styles[Style.Default].ForeColor = Color.White;
-                this.pTextData.StyleClearAll();
-            } else if (sExtension.Equals("lua"))
-            {
+                pTextData.StyleResetDefault();
+                pTextData.Styles[Style.Default].Font = "Consolas";
+                pTextData.Styles[Style.Default].Size = 10;
+                pTextData.Styles[Style.Default].BackColor = Color.FromArgb(0x282923);
+                pTextData.Styles[Style.Default].ForeColor = Color.White;
+                pTextData.StyleClearAll();
+            } else if (sExtension.Equals("lua")) {
                 // Extracted from the Lua Scintilla lexer and SciTE .properties file
 
                 var sAlpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -1225,134 +1030,129 @@ namespace Orion.Window
 
                 // Configuring the default style with properties
                 // we have common to every lexer style saves time.
-                this.pTextData.StyleResetDefault();
-                this.pTextData.Styles[Style.Default].Font = "Consolas";
-                this.pTextData.Styles[Style.Default].Size = 10;
-                this.pTextData.Styles[Style.Default].BackColor = Color.FromArgb(0x282923);
-                this.pTextData.Styles[Style.Default].ForeColor = Color.White;
-                this.pTextData.StyleClearAll();
+                pTextData.StyleResetDefault();
+                pTextData.Styles[Style.Default].Font = "Consolas";
+                pTextData.Styles[Style.Default].Size = 10;
+                pTextData.Styles[Style.Default].BackColor = Color.FromArgb(0x282923);
+                pTextData.Styles[Style.Default].ForeColor = Color.White;
+                pTextData.StyleClearAll();
 
                 // Configure the Lua lexer styles
-                this.pTextData.Styles[Style.Lua.Default].ForeColor = Color.Silver;
-                this.pTextData.Styles[Style.Lua.Comment].ForeColor = Color.FromArgb(0xD8D8D8);
-                this.pTextData.Styles[Style.Lua.CommentLine].ForeColor = Color.FromArgb(0xD8D8D8);
-                this.pTextData.Styles[Style.Lua.Number].ForeColor = Color.FromArgb(0xC48CFF);
-                this.pTextData.Styles[Style.Lua.Word].ForeColor = Color.FromArgb(0xFF007F);
-                this.pTextData.Styles[Style.Lua.Word2].ForeColor = Color.BlueViolet;
-                this.pTextData.Styles[Style.Lua.Word3].ForeColor = Color.FromArgb(0x52E3F6);
-                this.pTextData.Styles[Style.Lua.Word4].ForeColor = Color.FromArgb(0x52E3F6);
-                this.pTextData.Styles[Style.Lua.String].ForeColor = Color.FromArgb(0xECE47E);
-                this.pTextData.Styles[Style.Lua.Character].ForeColor = Color.FromArgb(0xECE47E);
-                this.pTextData.Styles[Style.Lua.LiteralString].ForeColor = Color.FromArgb(0xECE47E);
-                this.pTextData.Styles[Style.Lua.StringEol].BackColor = Color.Pink;
-                this.pTextData.Styles[Style.Lua.Operator].ForeColor = Color.White;
-                this.pTextData.Styles[Style.Lua.Preprocessor].ForeColor = Color.Maroon;
-                this.pTextData.Lexer = Lexer.Lua;
-                this.pTextData.WordChars = sAlpha + sNumeric + sAccented;
+                pTextData.Styles[Style.Lua.Default].ForeColor = Color.Silver;
+                pTextData.Styles[Style.Lua.Comment].ForeColor = Color.FromArgb(0xD8D8D8);
+                pTextData.Styles[Style.Lua.CommentLine].ForeColor = Color.FromArgb(0xD8D8D8);
+                pTextData.Styles[Style.Lua.Number].ForeColor = Color.FromArgb(0xC48CFF);
+                pTextData.Styles[Style.Lua.Word].ForeColor = Color.FromArgb(0xFF007F);
+                pTextData.Styles[Style.Lua.Word2].ForeColor = Color.BlueViolet;
+                pTextData.Styles[Style.Lua.Word3].ForeColor = Color.FromArgb(0x52E3F6);
+                pTextData.Styles[Style.Lua.Word4].ForeColor = Color.FromArgb(0x52E3F6);
+                pTextData.Styles[Style.Lua.String].ForeColor = Color.FromArgb(0xECE47E);
+                pTextData.Styles[Style.Lua.Character].ForeColor = Color.FromArgb(0xECE47E);
+                pTextData.Styles[Style.Lua.LiteralString].ForeColor = Color.FromArgb(0xECE47E);
+                pTextData.Styles[Style.Lua.StringEol].BackColor = Color.Pink;
+                pTextData.Styles[Style.Lua.Operator].ForeColor = Color.White;
+                pTextData.Styles[Style.Lua.Preprocessor].ForeColor = Color.Maroon;
+                pTextData.Lexer = Lexer.Lua;
+                pTextData.WordChars = sAlpha + sNumeric + sAccented;
 
                 // Keywords
-                this.pTextData.SetKeywords(0, "and break do else elseif end for function if in local nil not or repeat return then until while" + " false true" + " goto");
+                pTextData.SetKeywords(0, "and break do else elseif end for function if in local nil not or repeat return then until while" + " false true" + " goto");
                 // Basic Functions
-                this.pTextData.SetKeywords(1, "assert collectgarbage dofile error _G getmetatable ipairs loadfile next pairs pcall print rawequal rawget rawset setmetatable tonumber tostring type _VERSION xpcall string table math coroutine io os debug" + " getfenv gcinfo load loadlib loadstring require select setfenv unpack _LOADED LUA_PATH _REQUIREDNAME package rawlen package bit32 utf8 _ENV");
+                pTextData.SetKeywords(1, "assert collectgarbage dofile error _G getmetatable ipairs loadfile next pairs pcall print rawequal rawget rawset setmetatable tonumber tostring type _VERSION xpcall string table math coroutine io os debug" + " getfenv gcinfo load loadlib loadstring require select setfenv unpack _LOADED LUA_PATH _REQUIREDNAME package rawlen package bit32 utf8 _ENV");
                 // String Manipulation & Mathematical
-                this.pTextData.SetKeywords(2, "string.byte string.char string.dump string.find string.format string.gsub string.len string.lower string.rep string.sub string.upper table.concat table.insert table.remove table.sort math.abs math.acos math.asin math.atan math.atan2 math.ceil math.cos math.deg math.exp math.floor math.frexp math.ldexp math.log math.max math.min math.pi math.pow math.rad math.random math.randomseed math.sin math.sqrt math.tan" + " string.gfind string.gmatch string.match string.reverse string.pack string.packsize string.unpack table.foreach table.foreachi table.getn table.setn table.maxn table.pack table.unpack table.move math.cosh math.fmod math.huge math.log10 math.modf math.mod math.sinh math.tanh math.maxinteger math.mininteger math.tointeger math.type math.ult" + " bit32.arshift bit32.band bit32.bnot bit32.bor bit32.btest bit32.bxor bit32.extract bit32.replace bit32.lrotate bit32.lshift bit32.rrotate bit32.rshift" + " utf8.char utf8.charpattern utf8.codes utf8.codepoint utf8.len utf8.offset");
+                pTextData.SetKeywords(2, "string.byte string.char string.dump string.find string.format string.gsub string.len string.lower string.rep string.sub string.upper table.concat table.insert table.remove table.sort math.abs math.acos math.asin math.atan math.atan2 math.ceil math.cos math.deg math.exp math.floor math.frexp math.ldexp math.log math.max math.min math.pi math.pow math.rad math.random math.randomseed math.sin math.sqrt math.tan" + " string.gfind string.gmatch string.match string.reverse string.pack string.packsize string.unpack table.foreach table.foreachi table.getn table.setn table.maxn table.pack table.unpack table.move math.cosh math.fmod math.huge math.log10 math.modf math.mod math.sinh math.tanh math.maxinteger math.mininteger math.tointeger math.type math.ult" + " bit32.arshift bit32.band bit32.bnot bit32.bor bit32.btest bit32.bxor bit32.extract bit32.replace bit32.lrotate bit32.lshift bit32.rrotate bit32.rshift" + " utf8.char utf8.charpattern utf8.codes utf8.codepoint utf8.len utf8.offset");
                 // Input and Output Facilities and System Facilities
-                this.pTextData.SetKeywords(3, "coroutine.create coroutine.resume coroutine.status coroutine.wrap coroutine.yield io.close io.flush io.input io.lines io.open io.output io.read io.tmpfile io.type io.write io.stdin io.stdout io.stderr os.clock os.date os.difftime os.execute os.exit os.getenv os.remove os.rename os.setlocale os.time os.tmpname" + " coroutine.isyieldable coroutine.running io.popen module package.loaders package.seeall package.config package.searchers package.searchpath" + " require package.cpath package.loaded package.loadlib package.path package.preload");
+                pTextData.SetKeywords(3, "coroutine.create coroutine.resume coroutine.status coroutine.wrap coroutine.yield io.close io.flush io.input io.lines io.open io.output io.read io.tmpfile io.type io.write io.stdin io.stdout io.stderr os.clock os.date os.difftime os.execute os.exit os.getenv os.remove os.rename os.setlocale os.time os.tmpname" + " coroutine.isyieldable coroutine.running io.popen module package.loaders package.seeall package.config package.searchers package.searchpath" + " require package.cpath package.loaded package.loadlib package.path package.preload");
 
                 // Instruct the lexer to calculate folding
-                this.pTextData.SetProperty("fold", "1");
-                this.pTextData.SetProperty("fold.compact", "1");
+                pTextData.SetProperty("fold", "1");
+                pTextData.SetProperty("fold.compact", "1");
 
                 // Configure a margin to display folding symbols
-                this.pTextData.Margins[2].Type = MarginType.Symbol;
-                this.pTextData.Margins[2].Mask = Marker.MaskFolders;
-                this.pTextData.Margins[2].Sensitive = true;
-                this.pTextData.Margins[2].Width = 20;
+                pTextData.Margins[2].Type = MarginType.Symbol;
+                pTextData.Margins[2].Mask = Marker.MaskFolders;
+                pTextData.Margins[2].Sensitive = true;
+                pTextData.Margins[2].Width = 20;
 
                 // Set colors for all folding markers
-                for (int i = 25; i <= 31; i++)
-                {
-                    this.pTextData.Markers[i].SetForeColor(SystemColors.ControlLightLight);
-                    this.pTextData.Markers[i].SetBackColor(SystemColors.ControlDark);
+                for (int i = 25; i <= 31; i++) {
+                    pTextData.Markers[i].SetForeColor(SystemColors.ControlLightLight);
+                    pTextData.Markers[i].SetBackColor(SystemColors.ControlDark);
                 }
 
                 // Configure folding markers with respective symbols
-                this.pTextData.Markers[Marker.Folder].Symbol = MarkerSymbol.BoxPlus;
-                this.pTextData.Markers[Marker.FolderOpen].Symbol = MarkerSymbol.BoxMinus;
-                this.pTextData.Markers[Marker.FolderEnd].Symbol = MarkerSymbol.BoxPlusConnected;
-                this.pTextData.Markers[Marker.FolderMidTail].Symbol = MarkerSymbol.TCorner;
-                this.pTextData.Markers[Marker.FolderOpenMid].Symbol = MarkerSymbol.BoxMinusConnected;
-                this.pTextData.Markers[Marker.FolderSub].Symbol = MarkerSymbol.VLine;
-                this.pTextData.Markers[Marker.FolderTail].Symbol = MarkerSymbol.LCorner;
+                pTextData.Markers[Marker.Folder].Symbol = MarkerSymbol.BoxPlus;
+                pTextData.Markers[Marker.FolderOpen].Symbol = MarkerSymbol.BoxMinus;
+                pTextData.Markers[Marker.FolderEnd].Symbol = MarkerSymbol.BoxPlusConnected;
+                pTextData.Markers[Marker.FolderMidTail].Symbol = MarkerSymbol.TCorner;
+                pTextData.Markers[Marker.FolderOpenMid].Symbol = MarkerSymbol.BoxMinusConnected;
+                pTextData.Markers[Marker.FolderSub].Symbol = MarkerSymbol.VLine;
+                pTextData.Markers[Marker.FolderTail].Symbol = MarkerSymbol.LCorner;
 
                 // Enable automatic folding
-                this.pTextData.AutomaticFold = (AutomaticFold.Show | AutomaticFold.Click | AutomaticFold.Change);
-            } else
-            {
+                pTextData.AutomaticFold = (AutomaticFold.Show | AutomaticFold.Click | AutomaticFold.Change);
+            } else {
                 // Reset the styles
-                this.pTextData.StyleResetDefault();
-                this.pTextData.Styles[Style.Default].Font = "Consolas";
-                this.pTextData.Styles[Style.Default].Size = 10;
-                this.pTextData.Styles[Style.Default].BackColor = Color.FromArgb(0x282923);
-                this.pTextData.Styles[Style.Default].ForeColor = Color.LightGray;
-                this.pTextData.StyleClearAll();
+                pTextData.StyleResetDefault();
+                pTextData.Styles[Style.Default].Font = "Consolas";
+                pTextData.Styles[Style.Default].Size = 10;
+                pTextData.Styles[Style.Default].BackColor = Color.FromArgb(0x282923);
+                pTextData.Styles[Style.Default].ForeColor = Color.LightGray;
+                pTextData.StyleClearAll();
 
                 // Set the Styles to replicate Sublime
-                this.pTextData.Styles[Style.Xml.XmlStart].ForeColor = Color.White;
-                this.pTextData.Styles[Style.Xml.XmlEnd].ForeColor = Color.White;
-                this.pTextData.Styles[Style.Xml.Other].ForeColor = Color.White;
-                this.pTextData.Styles[Style.Xml.Attribute].ForeColor = Color.FromArgb(0xA7EC21);
-                this.pTextData.Styles[Style.Xml.Entity].ForeColor = Color.FromArgb(0xA7EC21);
-                this.pTextData.Styles[Style.Xml.Comment].ForeColor = Color.FromArgb(0xD8D8D8);
-                this.pTextData.Styles[Style.Xml.Tag].ForeColor = Color.FromArgb(0xFF007F);
-                this.pTextData.Styles[Style.Xml.TagEnd].ForeColor = Color.FromArgb(0xFF007F);
-                this.pTextData.Styles[Style.Xml.DoubleString].ForeColor = Color.FromArgb(0xECE47E);
-                this.pTextData.Styles[Style.Xml.SingleString].ForeColor = Color.FromArgb(0xECE47E);
+                pTextData.Styles[Style.Xml.XmlStart].ForeColor = Color.White;
+                pTextData.Styles[Style.Xml.XmlEnd].ForeColor = Color.White;
+                pTextData.Styles[Style.Xml.Other].ForeColor = Color.White;
+                pTextData.Styles[Style.Xml.Attribute].ForeColor = Color.FromArgb(0xA7EC21);
+                pTextData.Styles[Style.Xml.Entity].ForeColor = Color.FromArgb(0xA7EC21);
+                pTextData.Styles[Style.Xml.Comment].ForeColor = Color.FromArgb(0xD8D8D8);
+                pTextData.Styles[Style.Xml.Tag].ForeColor = Color.FromArgb(0xFF007F);
+                pTextData.Styles[Style.Xml.TagEnd].ForeColor = Color.FromArgb(0xFF007F);
+                pTextData.Styles[Style.Xml.DoubleString].ForeColor = Color.FromArgb(0xECE47E);
+                pTextData.Styles[Style.Xml.SingleString].ForeColor = Color.FromArgb(0xECE47E);
 
                 // Set the XML Lexer
-                this.pTextData.Lexer = Lexer.Xml;
+                pTextData.Lexer = Lexer.Xml;
 
                 // Show line numbers
-                this.pTextData.Margins[0].Width = this.pTextData.TextWidth(Style.LineNumber, new string('9', 8)) + 2;
+                pTextData.Margins[0].Width = pTextData.TextWidth(Style.LineNumber, new string('9', 8)) + 2;
 
                 // Enable folding
-                this.pTextData.SetProperty("fold", "1");
-                this.pTextData.SetProperty("fold.compact", "1");
-                this.pTextData.SetProperty("fold.html", "1");
+                pTextData.SetProperty("fold", "1");
+                pTextData.SetProperty("fold.compact", "1");
+                pTextData.SetProperty("fold.html", "1");
 
                 // Use Margin 2 for fold markers
-                this.pTextData.Margins[2].Type = MarginType.Symbol;
-                this.pTextData.Margins[2].Mask = Marker.MaskFolders;
-                this.pTextData.Margins[2].Sensitive = true;
-                this.pTextData.Margins[2].Width = 20;
+                pTextData.Margins[2].Type = MarginType.Symbol;
+                pTextData.Margins[2].Mask = Marker.MaskFolders;
+                pTextData.Margins[2].Sensitive = true;
+                pTextData.Margins[2].Width = 20;
 
                 // Reset folder markers
-                for (int i = Marker.FolderEnd; i <= Marker.FolderOpen; i++)
-                {
-                    this.pTextData.Markers[i].SetForeColor(SystemColors.ControlLightLight);
-                    this.pTextData.Markers[i].SetBackColor(SystemColors.ControlDark);
+                for (int i = Marker.FolderEnd; i <= Marker.FolderOpen; i++) {
+                    pTextData.Markers[i].SetForeColor(SystemColors.ControlLightLight);
+                    pTextData.Markers[i].SetBackColor(SystemColors.ControlDark);
                 }
 
                 // Style the folder markers
-                this.pTextData.Markers[Marker.Folder].Symbol = MarkerSymbol.BoxPlus;
-                this.pTextData.Markers[Marker.Folder].SetBackColor(SystemColors.ControlText);
-                this.pTextData.Markers[Marker.FolderOpen].Symbol = MarkerSymbol.BoxMinus;
-                this.pTextData.Markers[Marker.FolderEnd].Symbol = MarkerSymbol.BoxPlusConnected;
-                this.pTextData.Markers[Marker.FolderEnd].SetBackColor(SystemColors.ControlText);
-                this.pTextData.Markers[Marker.FolderMidTail].Symbol = MarkerSymbol.TCorner;
-                this.pTextData.Markers[Marker.FolderOpenMid].Symbol = MarkerSymbol.BoxMinusConnected;
-                this.pTextData.Markers[Marker.FolderSub].Symbol = MarkerSymbol.VLine;
-                this.pTextData.Markers[Marker.FolderTail].Symbol = MarkerSymbol.LCorner;
+                pTextData.Markers[Marker.Folder].Symbol = MarkerSymbol.BoxPlus;
+                pTextData.Markers[Marker.Folder].SetBackColor(SystemColors.ControlText);
+                pTextData.Markers[Marker.FolderOpen].Symbol = MarkerSymbol.BoxMinus;
+                pTextData.Markers[Marker.FolderEnd].Symbol = MarkerSymbol.BoxPlusConnected;
+                pTextData.Markers[Marker.FolderEnd].SetBackColor(SystemColors.ControlText);
+                pTextData.Markers[Marker.FolderMidTail].Symbol = MarkerSymbol.TCorner;
+                pTextData.Markers[Marker.FolderOpenMid].Symbol = MarkerSymbol.BoxMinusConnected;
+                pTextData.Markers[Marker.FolderSub].Symbol = MarkerSymbol.VLine;
+                pTextData.Markers[Marker.FolderTail].Symbol = MarkerSymbol.LCorner;
 
                 // Enable automatic folding
-                this.pTextData.AutomaticFold = AutomaticFold.Show | AutomaticFold.Click | AutomaticFold.Change;
+                pTextData.AutomaticFold = AutomaticFold.Show | AutomaticFold.Click | AutomaticFold.Change;
             }
         }
 
-        private static string Dir_BackSlashToSlash(string sDir)
-        {
-            while (sDir.Contains("\\"))
-            {
+        private static string Dir_BackSlashToSlash(string sDir) {
+            while (sDir.Contains("\\")) {
                 sDir = sDir.Replace("\\", "/");
             }
             return sDir;

@@ -38,7 +38,7 @@ namespace Orion.Crypto.Common
          * @return A packed stream with header sizes decoded
          * 
         */
-        public static PackStreamVerBase CreatePackVer(BinaryReader pHeader)
+        public static IPackStreamVerBase CreatePackVer(BinaryReader pHeader)
         {
             uint uVer = pHeader.ReadUInt32();
             switch (uVer)
