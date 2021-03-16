@@ -132,7 +132,7 @@ namespace Orion.Crypto
             } else
             {
                 // Decrypt the XOR encrypted block
-                pSrc = EncryptXOR(uVer, pSrc, uLen, uLenCompressed);
+                pSrc = EncryptXOR(uVer, pSrc, uLen);
             }
 
             if (bits[0] != 0)
@@ -175,7 +175,7 @@ namespace Orion.Crypto
             } else
             {
                 // Perform XOR block encryption
-                pEncrypted = EncryptXOR(uVer, pEncrypted, uLen, uLenCompressed);
+                pEncrypted = EncryptXOR(uVer, pEncrypted, uLen);
             }
             
             uLenEncoded = (uint) pEncrypted.Length;
@@ -183,8 +183,7 @@ namespace Orion.Crypto
             return pEncrypted;
         }
 
-        private static byte[] EncryptXOR(uint uVer, byte[] pSrc, uint uLen, uint uLenCompressed)
-        {
+        private static byte[] EncryptXOR(uint uVer, byte[] pSrc, uint uLen) {
 
             CipherKeys.GetXORKey(uVer, out byte[] aKey);
 
